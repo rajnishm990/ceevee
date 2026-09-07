@@ -1,0 +1,36 @@
+[project]
+name = "fastapi-pdf-service"
+version = "0.1.0"
+description = "High-performance async FastAPI service with PyMuPDF parsing"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.52.4",
+    "pydantic==2.13.5",
+    "pydantic-settings==2.15.0",
+    "python-dotenv==1.2.3",
+    "SQLAlchemy==2.0.52",
+    "asyncpg==0.31.0",
+    "alembic==1.19.2",
+    "argon2-cffi==25.1.0",
+    "PyJWT[crypto]==2.13.0",
+    "cryptography==50.0.1",
+    "python-multipart==0.0.32",
+    "redis==8.1.0",
+    "slowapi==0.1.10",
+    "aiobotocore==3.9.0",
+    "pymupdf==1.28.2",
+    "puremagic==2.2.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "httpx==0.28.1"
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
