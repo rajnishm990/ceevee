@@ -1,0 +1,95 @@
+# ==========================================
+# Python Core & Byte-compiled files
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ==========================================
+# Virtual Environments (Local dependencies)
+# ==========================================
+.venv/
+venv/
+ENV/
+env/
+pythonenv*/
+
+# ==========================================
+# FastAPI / Web App Specifics
+# ==========================================
+# Environment variables and application secrets
+.env
+.env.*
+!.env.example
+secrets.json
+
+# Local databases (SQLite) and logs
+*.db
+*.sqlite3
+*.log
+logs/
+
+# ==========================================
+# Package Managers & Build Artifacts
+# ==========================================
+# Note: Keep *.lock files (poetry.lock, Pipfile.lock) in version control!
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ==========================================
+# Testing and Coverage
+# ==========================================
+.htmlcov/
+.tox/
+.nosetests/
+.pytest_cache/
+.cache/
+htmlcov/
+nslog/
+.coverage
+.coverage.*
+*.cover
+.mutmut-cache
+.hypothesis/
+
+# ==========================================
+# IDEs and Editors
+# ==========================================
+# JetBrains / PyCharm
+.idea/
+
+# VS Code
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+*.code-workspace
+
+# Temporary files
+*.swp
+*~
+
+# ==========================================
+# Operating System files
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+Thumsc.db
+ehthumbs.db
+Icon?
