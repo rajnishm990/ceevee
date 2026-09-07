@@ -11,17 +11,17 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # Security Keys
-    SECRET_KEY: str                  # For signing JWTs (minimum 32 random chars)
+    SECRET_KEY: str                  
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
-    # AES-256 requires exactly a 32-byte key (Base64-encoded in env)
+   
     PDF_ENCRYPTION_KEY: str          
 
     # Database & Cache
-    DATABASE_URL: str                # e.g., postgresql+asyncpg://user:pass@localhost:5432/resumedb
-    REDIS_URL: str                   # e.g., redis://localhost:6379/0
+    DATABASE_URL: str                
+    REDIS_URL: str                   
 
     # Storage Backend
     STORAGE_BACKEND: str = "s3"      # "s3" or "local"
