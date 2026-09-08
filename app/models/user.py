@@ -1,9 +1,9 @@
 from typing import List , Dict , ANy , Optional 
 from sqlalchemy import String , Boolean , JSON 
 from sqlalchemy.orm import mapped_column , Mapped , relationship 
-from app.db.base import Base 
+from app.db.base import BaseModel
 
-class User(Base):
+class User(BaseModel):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
