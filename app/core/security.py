@@ -1,24 +1,26 @@
-import base64 
-import os 
-from datetime import datetime , timedelta , timezone 
-from typing import Any , Dict , Tuple 
-from argon2 import PasswordHasher 
-from argon2.exceptions import VerifyMismatchError 
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-import jwt 
+import base64
+import os
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict
 
-from app.core.config import settings 
+import jwt
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+from app.core.config import settings
 
 pwd_hasher = PasswordHasher(
     time_cost=3,
-    memory_cost=65536,   #64 mb 
+    memory_cost=65536,  # 64 MB
     parallelism=4,
     hash_len=32,
-    salt_len=16
-) 
+    salt_len=16,
+)
 
 _raw_enc_key = base64.b64decode(settings.PDF_ENCRYPTION_KEY)
 aesgcm = AESGCM(_raw_enc_key)
+
 
 def hash_password(password: str) -> str:
     return pwd_hasher.hash(password)
@@ -28,13 +30,20 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
         return pwd_hasher.verify(hashed_password, plain_password)
     except VerifyMismatchError:
-        return False 
+        return False
+
 
 def create_access_token(subject: str | int, claims: Dict[str, Any] | None = None) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode = {"sub": str(subject), "exp": expire, "type": "access"}
     if claims:
         to_encode.update(claims)
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+
+def create_refresh_token(subject: str | int) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode = {"sub": str(subject), "exp": expire, "type": "refresh"}
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
@@ -45,9 +54,9 @@ def decode_token(token: str) -> Dict[str, Any]:
 def encrypt_pdf_payload(data: bytes) -> bytes:
     """
     Encrypts a raw PDF binary using AES-256-GCM.
-    Returns: 12-byte Nonce + Ciphertext (which includes the 16-byte GCM authentication tag).
+    Returns: 12-byte nonce + ciphertext (which includes the 16-byte GCM auth tag).
     """
-    nonce = os.urandom(12)  # Standard 96-bit nonce for GCM
+    nonce = os.urandom(12)  # standard 96-bit nonce for GCM
     ciphertext = aesgcm.encrypt(nonce, data, None)
     return nonce + ciphertext
 
