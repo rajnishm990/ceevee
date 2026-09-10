@@ -1,4 +1,4 @@
-from typing import List , Dict , ANy , Optional 
+from typing import List , Dict , Any , Optional 
 from sqlalchemy import String , Boolean , JSON 
 from sqlalchemy.orm import mapped_column , Mapped , relationship 
 from app.db.base import BaseModel
