@@ -34,3 +34,4 @@ def get_user_repo(db:AsyncSession = Depends(get_db)) -> UserRepository:
 
 def get_resume_service(db: AsyncSession = Depends(get_db)) -> ResumeService:
     return ResumeService(SectionRepository(db), VersionRepository(db))
+

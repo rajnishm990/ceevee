@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Request
 
-from app.api.deps import get_user_repo
+from app.api.deps import get_user_repo , get_current_user
 from app.core.rate_limit import limiter
 from app.repositories.user_repo import UserRepository
 from app.schemas.user import RefreshRequest, TokenPair, UserCreate, UserLogin, UserResponse
@@ -24,3 +24,7 @@ async def login(request: Request, payload: UserLogin, user_repo: UserRepository 
 @router.post("/refresh", response_model=TokenPair)
 async def refresh(payload: RefreshRequest, user_repo: UserRepository = Depends(get_user_repo)):
     return await AuthService(user_repo).refresh(payload.refresh_token)
+
+@router.get("/me", response_model=UserResponse)
+async def me(current_user:User = Depends(get_current_user)):
+    return current_user 
