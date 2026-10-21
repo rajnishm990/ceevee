@@ -21,3 +21,10 @@ class User(BaseModel):
         back_populates="user", 
         cascade="all, delete-orphan"
     )
+
+    profile: Mapped[Optional["Profile"]] = relationship(
+        "Profile", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
+    cover_letters: Mapped[List["CoverLetterTemplate"]] = relationship(
+        "CoverLetterTemplate", back_populates="user", cascade="all, delete-orphan"
+    )

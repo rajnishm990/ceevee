@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional
 
-from sqlalchemy import ForeignKey, Integer, JSON, String
+from sqlalchemy import ForeignKey, Integer, JSON, String ,UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import BaseModel
@@ -11,6 +11,7 @@ class ResumeVersion(BaseModel):
     # points at "resume_versions.id". The original stub had this as
     # "resume_version" (singular), which would fail at table-creation time.
     __tablename__ = "resume_versions"
+    __table_args__ = (UniqueConstraint("section_id", "version_number", name="uq_section_version_number"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
 
@@ -32,6 +33,7 @@ class ResumeVersion(BaseModel):
     coordinate_map: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
     # span_id -> current text - what the edit UI actually reads/writes.
     content: Mapped[Dict[str, str]] = mapped_column(JSON, nullable=False)
+    page_info: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
 
     section: Mapped["ResumeSection"] = relationship(
         "ResumeSection",
