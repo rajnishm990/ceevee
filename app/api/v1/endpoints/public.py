@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Request, Response
 
 from app.api.deps import get_resume_service
+from app.api.responses import pdf_response
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.services.resume_service import ResumeService
@@ -17,5 +18,4 @@ async def get_public_resume(request: Request, slug: str, service: ResumeService 
     and consistent with every other endpoint. Deliberately returns ONLY the
     raw PDF - no JSON, no metadata, no hint of what else exists on the
     account."""
-    pdf_bytes = await service.get_public_pdf_by_slug(slug)
-    return Response(content=pdf_bytes, media_type="application/pdf")
+    return pdf_response(await service.get_public_pdf_by_slug(slug))
