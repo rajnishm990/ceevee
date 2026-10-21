@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.core.config import settings 
 from app.db.base import BaseModel 
-from app.models import ResumeSection, ResumeVersion, User  
+from app.models import CoverLetterTemplate, Profile, ResumeSection, ResumeVersion, User  # noqa: F401
 
 config = context.config 
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL) 
@@ -43,3 +43,4 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     asyncio.run(run_migrations_online())
+
