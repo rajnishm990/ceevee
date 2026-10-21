@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict  , Field , field_validator
 
 
 class ResumeVersionResponse(BaseModel):
@@ -32,6 +32,13 @@ class ResumeEditRequest(BaseModel):
     # else in the PDF stays pixel-identical.
     updated_content: Dict[str, str]
 
+    @field_validator("updated_content")
+    @classmethod 
+    def _limit_text(cls , v: Dict[str , str]) -> Dict[str , str]:
+        if any(len(t) > 500 for t in v.values()):
+            raise ValueError("Each text span is limited to 500 characters")
+        return v 
+
 
 class LabelUpdateRequest(BaseModel):
-    label: Optional[str] = None
+    label: Optional[str] = Field(default=None , max_length=100)
