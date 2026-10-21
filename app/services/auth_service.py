@@ -1,3 +1,5 @@
+import asyncio
+
 from app.core.exceptions import ConflictException, InvalidCredentialsException
 from app.core.security import (
     create_access_token,
@@ -9,6 +11,7 @@ from app.core.security import (
 from app.repositories.user_repo import UserRepository
 from app.schemas.user import TokenPair, UserCreate
 
+_DUMMY_HASH = hash_password("timing-equalizer")
 
 class AuthService:
     def __init__(self, user_repo: UserRepository):
@@ -18,12 +21,15 @@ class AuthService:
         existing = await self.user_repo.get_by_email(user_in.email)
         if existing:
             raise ConflictException("An account with this email already exists.")
-        hashed = hash_password(user_in.password)
+        #hashed = hash_password(user_in.password)
+        hashed = await asyncio.to_thread(hash_password, user_in.password)
         return await self.user_repo.create(user_in, hashed)
 
     async def authenticate(self, email: str, password: str) -> TokenPair:
         user = await self.user_repo.get_by_email(email)
-        if not user or not verify_password(password, user.hashed_password):
+        stored = user.hashed_password if user else _DUMMY_HASH 
+        valid = await asyncio.to_thread(verify_password, password , stored)
+        if not user or not valid:
             raise InvalidCredentialsException()
         return TokenPair(
             access_token=create_access_token(user.id),
