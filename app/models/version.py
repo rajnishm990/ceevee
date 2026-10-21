@@ -1,9 +1,13 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional , List , TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, Integer, JSON, String ,UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import BaseModel
+from app.db.base import BaseModel 
+
+
+if TYPE_CHECKING:
+    from app.models.section import ResumeSection
 
 
 class ResumeVersion(BaseModel):

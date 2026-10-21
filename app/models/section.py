@@ -1,9 +1,15 @@
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+
 from app.db.base import BaseModel
+
+if TYPE_CHECKING:
+    from app.models.user import User 
+    from app.models.section import ResumeSection 
+    from app.models.version import ResumeVersion
 
 
 class ResumeSection(BaseModel):

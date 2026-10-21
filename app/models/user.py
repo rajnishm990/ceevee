@@ -1,7 +1,12 @@
-from typing import List , Dict , Any , Optional 
+from typing import List , Dict , Any , Optional , TYPE_CHECKING
 from sqlalchemy import String , Boolean , JSON 
 from sqlalchemy.orm import mapped_column , Mapped , relationship 
 from app.db.base import BaseModel
+
+if TYPE_CHECKING:
+    from app.models.cover_letter import CoverLetterTemplate 
+    from app.models.profile import Profile 
+    from app.models.section import ResumeSection 
 
 class User(BaseModel):
     __tablename__ = "users"

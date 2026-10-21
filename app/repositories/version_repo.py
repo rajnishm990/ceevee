@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.version import ResumeVersion
@@ -18,6 +18,7 @@ class VersionRepository:
         base_template_url: str,
         coordinate_map: dict,
         content: dict,
+        page_info: list,
         label: Optional[str] = None,
     ) -> ResumeVersion:
         db_obj = ResumeVersion(
@@ -27,6 +28,7 @@ class VersionRepository:
             base_template_url=base_template_url,
             coordinate_map=coordinate_map,
             content=content,
+            page_info=page_info,
         )
         self.session.add(db_obj)
         await self.session.flush()
@@ -35,7 +37,7 @@ class VersionRepository:
 
     async def get_by_id(self, version_id: int) -> Optional[ResumeVersion]:
         stmt = select(ResumeVersion).where(ResumeVersion.id == version_id)
-        result = await self.session.execute(stmt)  # was "smtm" (typo'd) in the original stub
+        result = await self.session.execute(stmt)  
         return result.scalar_one_or_none()
 
     async def list_for_section(self, section_id: int) -> List[ResumeVersion]:
@@ -44,8 +46,18 @@ class VersionRepository:
         )
         return list(result.scalars().all())
 
-    async def count_for_section(self, section_id: int) -> int:
-        return len(await self.list_for_section(section_id))
+    async def next_version_number(self, section_id: int) -> int:
+        result = await self.session.execute(
+            select(func.coalesce(func.max(ResumeVersion.version_number), 0)).where(ResumeVersion.section_id == section_id)
+        )
+        return result.scalar_one() + 1
+
+    async def update_label(self, version: ResumeVersion, label) -> ResumeVersion:
+        version.label = label
+        self.session.add(version)
+        await self.session.flush()
+        await self.session.refresh(version)
+        return version
 
     async def update_final_pdf_url(self, version: ResumeVersion, url: str) -> ResumeVersion:
         version.final_pdf_url = url
@@ -64,3 +76,4 @@ class VersionRepository:
     async def delete(self, version: ResumeVersion) -> None:
         await self.session.delete(version)
         await self.session.flush()
+

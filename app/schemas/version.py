@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict  , Field , field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ResumeVersionResponse(BaseModel):
@@ -11,14 +11,13 @@ class ResumeVersionResponse(BaseModel):
     label: Optional[str]
     content: Dict[str, str]
     coordinate_map: Dict[str, Any]
+    page_info: List[Dict[str, Any]]
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class VersionSummary(BaseModel):
-    """Lighter-weight shape used when listing versions inside a section."""
-
     id: int
     version_number: int
     label: Optional[str]
@@ -28,17 +27,15 @@ class VersionSummary(BaseModel):
 
 
 class ResumeEditRequest(BaseModel):
-    # span_id -> new text. Only spans you include are changed; everything
-    # else in the PDF stays pixel-identical.
-    updated_content: Dict[str, str]
+    updated_content: Dict[str, str] = Field(max_length=2000)
 
     @field_validator("updated_content")
-    @classmethod 
-    def _limit_text(cls , v: Dict[str , str]) -> Dict[str , str]:
+    @classmethod
+    def _limit_text(cls, v: Dict[str, str]) -> Dict[str, str]:
         if any(len(t) > 500 for t in v.values()):
-            raise ValueError("Each text span is limited to 500 characters")
-        return v 
+            raise ValueError("Each text span is limited to 500 characters.")
+        return v
 
 
 class LabelUpdateRequest(BaseModel):
-    label: Optional[str] = Field(default=None , max_length=100)
+    label: Optional[str] = Field(default=None, max_length=100)
