@@ -2,6 +2,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, status
 
+from app.api.responses import pdf_response
 from app.api.deps import get_current_user, get_resume_service
 from app.models.user import User
 from app.schemas.section import (
@@ -69,3 +70,12 @@ async def set_active_version(
     service: ResumeService = Depends(get_resume_service),
 ):
     return await service.set_active_version(section_id, current_user.id, payload.version_id)
+
+
+@router.get("/{section_id}/active-pdf")
+async def download_active_pdf(
+    section_id: int,
+    current_user: User = Depends(get_current_user),
+    service: ResumeService = Depends(get_resume_service),
+):
+    return pdf_response(await service.get_active_pdf_bytes(section_id, current_user.id))
