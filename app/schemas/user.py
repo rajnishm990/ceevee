@@ -14,7 +14,7 @@ class UserLogin(BaseModel):
 class UserResponse(BaseModel):
     id: int 
     email: EmailStr
-    is_active = bool 
+    is_active : bool 
     base_profile: Dict[str, Any]
 
     model_config = ConfigDict(from_attributes=True)

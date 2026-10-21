@@ -11,7 +11,7 @@ from app.repositories.version_repo import VersionRepository
 from app.services.resume_service import ResumeService 
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")  #token url is only for populating OpenAPi docs , login itself takes Json , not a form 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")  #token url is only for populating OpenAPi docs , login itself takes Json , not a form 
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db:AsyncSession = Depends(get_db)) -> User:
@@ -20,7 +20,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db:AsyncSession 
     except Exception as exc:
         raise InvalidCredentialsException("Invalid or expired token") from exc 
 
-    if payload.get["type"] != "access":
+    if payload.get("type") != "access":
         raise InvalidCredentialsException("This is not an access token")
 
     user_repo = UserRepository(db)

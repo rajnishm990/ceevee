@@ -3,6 +3,9 @@
 ## Project Structure
 ```text
 ceevee/
+    .pytest_cache/
+        v/
+            cache/
     alembic/
         env.py
         versions/
@@ -115,7 +118,7 @@ async def run_migrations_online() -> None:
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    asyncio.run(run_migrations_online)
+    asyncio.run(run_migrations_online())
 
 ```
 
@@ -199,7 +202,7 @@ from app.repositories.version_repo import VersionRepository
 from app.services.resume_service import ResumeService 
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")  #token url is only for populating OpenAPi docs , login itself takes Json , not a form 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")  #token url is only for populating OpenAPi docs , login itself takes Json , not a form 
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db:AsyncSession = Depends(get_db)) -> User:
@@ -208,7 +211,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db:AsyncSession 
     except Exception as exc:
         raise InvalidCredentialsException("Invalid or expired token") from exc 
 
-    if payload.get["type"] != "access":
+    if payload.get("type") != "access":
         raise InvalidCredentialsException("This is not an access token")
 
     user_repo = UserRepository(db)
@@ -238,6 +241,16 @@ def get_resume_service(db: AsyncSession = Depends(get_db)) -> ResumeService:
 **Path:** `app\api\v1\router.py`
 
 ```py
+from fastapi import APIRouter
+
+from app.api.v1.endpoints import auth, public, sections, versions
+
+api_router = APIRouter()
+
+api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
+api_router.include_router(sections.router, prefix="/sections", tags=["sections"])
+api_router.include_router(versions.router, tags=["versions"])  # paths already include /sections/{id}/versions
+api_router.include_router(public.router, prefix="/public", tags=["public"])
 
 ```
 
@@ -254,13 +267,33 @@ def get_resume_service(db: AsyncSession = Depends(get_db)) -> ResumeService:
 **Path:** `app\api\v1\endpoints\auth.py`
 
 ```py
-from fastapi import APIRouter , Depends, Request 
+from fastapi import APIRouter, Depends, Request
 
-from app.api.deps import get_user_repo 
-from app.core.rate_limit import limiter 
-from app.repositories.user_repo import UserRepository 
-from app.schemas.user import RefreshRequest,TokenPair,UserCreate, UserLogin , UserResponse 
+from app.api.deps import get_user_repo
+from app.core.rate_limit import limiter
+from app.repositories.user_repo import UserRepository
+from app.schemas.user import RefreshRequest, TokenPair, UserCreate, UserLogin, UserResponse
 from app.services.auth_service import AuthService
+
+router = APIRouter()
+
+
+@router.post("/register", response_model=UserResponse, status_code=201)
+@limiter.limit("10/minute")
+async def register(request: Request, payload: UserCreate, user_repo: UserRepository = Depends(get_user_repo)):
+    return await AuthService(user_repo).register(payload)
+
+
+@router.post("/login", response_model=TokenPair)
+@limiter.limit("10/minute")
+async def login(request: Request, payload: UserLogin, user_repo: UserRepository = Depends(get_user_repo)):
+    return await AuthService(user_repo).authenticate(payload.email, payload.password)
+
+
+@router.post("/refresh", response_model=TokenPair)
+async def refresh(payload: RefreshRequest, user_repo: UserRepository = Depends(get_user_repo)):
+    return await AuthService(user_repo).refresh(payload.refresh_token)
+
 ```
 
 ---
@@ -268,6 +301,27 @@ from app.services.auth_service import AuthService
 **Path:** `app\api\v1\endpoints\public.py`
 
 ```py
+from fastapi import APIRouter, Depends, Request, Response
+
+from app.api.deps import get_resume_service
+from app.core.config import settings
+from app.core.rate_limit import limiter
+from app.services.resume_service import ResumeService
+
+router = APIRouter()
+
+
+@router.get("/{slug}")
+@limiter.limit(settings.RATE_LIMIT_PUBLIC_SHARE)
+async def get_public_resume(request: Request, slug: str, service: ResumeService = Depends(get_resume_service)):
+    """Recruiter-facing endpoint. No auth required (that's the point - it's
+    the link you hand to a recruiter), but it still goes through the normal
+    DB dependency rather than opening its own session, so it stays testable
+    and consistent with every other endpoint. Deliberately returns ONLY the
+    raw PDF - no JSON, no metadata, no hint of what else exists on the
+    account."""
+    pdf_bytes = await service.get_public_pdf_by_slug(slug)
+    return Response(content=pdf_bytes, media_type="application/pdf")
 
 ```
 
@@ -276,6 +330,77 @@ from app.services.auth_service import AuthService
 **Path:** `app\api\v1\endpoints\sections.py`
 
 ```py
+from typing import List
+
+from fastapi import APIRouter, Depends, status
+
+from app.api.deps import get_current_user, get_resume_service
+from app.models.user import User
+from app.schemas.section import (
+    SectionCreate,
+    SectionResponse,
+    SectionUpdate,
+    SectionWithVersions,
+    SetActiveVersionRequest,
+)
+from app.services.resume_service import ResumeService
+
+router = APIRouter()
+
+
+@router.post("", response_model=SectionResponse, status_code=status.HTTP_201_CREATED)
+async def create_section(
+    payload: SectionCreate,
+    current_user: User = Depends(get_current_user),
+    service: ResumeService = Depends(get_resume_service),
+):
+    return await service.create_section(current_user.id, payload)
+
+
+@router.get("", response_model=List[SectionWithVersions])
+async def list_sections(
+    current_user: User = Depends(get_current_user),
+    service: ResumeService = Depends(get_resume_service),
+):
+    return await service.section_repo.list_for_user(current_user.id)
+
+
+@router.get("/{section_id}", response_model=SectionWithVersions)
+async def get_section(
+    section_id: int,
+    current_user: User = Depends(get_current_user),
+    service: ResumeService = Depends(get_resume_service),
+):
+    return await service.get_owned_section(section_id, current_user.id, with_versions=True)
+
+
+@router.patch("/{section_id}", response_model=SectionResponse)
+async def update_section(
+    section_id: int,
+    payload: SectionUpdate,
+    current_user: User = Depends(get_current_user),
+    service: ResumeService = Depends(get_resume_service),
+):
+    return await service.update_section(section_id, current_user.id, payload)
+
+
+@router.delete("/{section_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_section(
+    section_id: int,
+    current_user: User = Depends(get_current_user),
+    service: ResumeService = Depends(get_resume_service),
+):
+    await service.delete_section(section_id, current_user.id)
+
+
+@router.post("/{section_id}/active-version", response_model=SectionResponse)
+async def set_active_version(
+    section_id: int,
+    payload: SetActiveVersionRequest,
+    current_user: User = Depends(get_current_user),
+    service: ResumeService = Depends(get_resume_service),
+):
+    return await service.set_active_version(section_id, current_user.id, payload.version_id)
 
 ```
 
@@ -284,6 +409,49 @@ from app.services.auth_service import AuthService
 **Path:** `app\api\v1\endpoints\versions.py`
 
 ```py
+from fastapi import APIRouter, Depends, File, Response, UploadFile, status
+
+from app.api.deps import get_current_user, get_resume_service
+from app.models.user import User
+from app.schemas.version import ResumeEditRequest, ResumeVersionResponse
+from app.services.resume_service import ResumeService
+
+router = APIRouter()
+
+
+@router.post(
+    "/sections/{section_id}/versions",
+    response_model=ResumeVersionResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_version(
+    section_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    service: ResumeService = Depends(get_resume_service),
+):
+    raw_bytes = await file.read()
+    return await service.upload_version(section_id, current_user.id, file.filename, raw_bytes)
+
+
+@router.patch("/versions/{version_id}", response_model=ResumeVersionResponse)
+async def edit_version(
+    version_id: int,
+    payload: ResumeEditRequest,
+    current_user: User = Depends(get_current_user),
+    service: ResumeService = Depends(get_resume_service),
+):
+    return await service.edit_version(version_id, current_user.id, payload.updated_content)
+
+
+@router.get("/versions/{version_id}/download")
+async def download_version(
+    version_id: int,
+    current_user: User = Depends(get_current_user),
+    service: ResumeService = Depends(get_resume_service),
+):
+    pdf_bytes = await service.get_version_pdf_bytes(version_id, current_user.id)
+    return Response(content=pdf_bytes, media_type="application/pdf")
 
 ```
 
@@ -606,7 +774,7 @@ engine = create_async_engine(
     future = True 
 )
 
-AsynSessionLocal = async_sessionmaker(
+AsyncSessionLocal = async_sessionmaker(
     bind = engine,
     class_ = AsyncSession ,
     expire_on_commit=False 
@@ -614,7 +782,7 @@ AsynSessionLocal = async_sessionmaker(
 )
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with AsynSessionLocal() as session:
+    async with AsyncSessionLocal() as session:
         try:
             yield session 
             await session.commit 
@@ -978,11 +1146,11 @@ from app.schemas.version import VersionSummary
 
 class SectionCreate(BaseModel):
     domain_name : str = Field(min_length=1 , max_length=50)
-    grive_link: Optional[str] = None 
+    gdrive_link: Optional[str] = None 
 
 class SectionUpdate(BaseModel):
     domain_name: Optional[str] = Field(default=None , min_length=1 , max_length=50)
-    grive_link: Optional[str] = None  
+    gdrive_link: Optional[str] = None  
 
 class SetActiveVersionRequest(BaseModel):
     version_id: int 
@@ -991,7 +1159,7 @@ class SectionResponse(BaseModel):
     id: int 
     domain_name: str 
     shareable_slug : str 
-    grive_link : Optional[str]
+    gdrive_link : Optional[str]
     active_version_id: Optional[int]
 
     model_config= ConfigDict(from_attributes=True)
@@ -1021,7 +1189,7 @@ class UserLogin(BaseModel):
 class UserResponse(BaseModel):
     id: int 
     email: EmailStr
-    is_active = bool 
+    is_active : bool 
     base_profile: Dict[str, Any]
 
     model_config = ConfigDict(from_attributes=True)
