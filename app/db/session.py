@@ -1,29 +1,33 @@
-from typing import AsyncGenerator 
+from typing import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession,async_sessionmaker, async_session ,create_async_engine 
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core.config import settings 
+from app.core.config import settings
 
 
-engine = create_async_engine(
-    settings.DATABASE_URL ,
-    echo = settings.DEBUG ,
-    future = True 
-)
+def enable_sqlite_fk(engine: AsyncEngine) -> None:
+    if engine.dialect.name != "sqlite":
+        return
 
-AsyncSessionLocal = async_sessionmaker(
-    bind = engine,
-    class_ = AsyncSession ,
-    expire_on_commit=False 
+    @event.listens_for(engine.sync_engine, "connect")
+    def _on_connect(dbapi_conn, _record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
-)
+
+engine = create_async_engine(settings.DATABASE_URL, echo=settings.DEBUG, future=True)
+enable_sqlite_fk(engine)
+
+AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         try:
-            yield session 
-            await session.commit 
+            yield session
+            await session.commit()
         except Exception:
             await session.rollback()
-            raise 
-
+            raise
