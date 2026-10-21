@@ -11,7 +11,7 @@ class ProfileRepository:
     def __init__(self, session: AsyncSession):
         self.session = session 
 
-    async def get_for_user(self, user_id: int) -> Optional[Profile] ->
+    async def get_for_user(self, user_id: int) -> Optional[Profile]:
         result = await self.session.execute(select(Profile).where(Profile.user_id == user_id))
         return result.scalar_one_or_none()
 
