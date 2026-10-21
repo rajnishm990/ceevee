@@ -1,101 +1,142 @@
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Tuple
 
-import fitz  # PyMuPDF
+import fitz
+
+_FONT_FAMILIES = {
+    "sans": ("helv", "hebo", "heit", "hebi"),
+    "serif": ("tiro", "tibo", "tiit", "tibi"),
+    "mono": ("cour", "cobo", "coit", "cobi"),
+}
+_SERIF_HINTS = ("times", "georgia", "garamond", "cambria", "palatino", "minion")
+_RIGHT_MARGIN = 36.0
+_NEIGHBOUR_GAP = 6.0
+
+
+class PdfReadError(Exception):
+    pass
+
+
+def pick_font(flags: int, font_name: str) -> str:
+    name = font_name.lower()
+    if flags & 8 or "mono" in name or "courier" in name:
+        family = "mono"
+    elif flags & 4 or any(h in name for h in _SERIF_HINTS):
+        family = "serif"
+    else:
+        family = "sans"
+    bold = bool(flags & 16) or "bold" in name
+    italic = bool(flags & 2) or "italic" in name or "oblique" in name
+    index = 3 if bold and italic else 1 if bold else 2 if italic else 0
+    return _FONT_FAMILIES[family][index]
 
 
 def extract_layout(pdf_bytes: bytes) -> Dict[str, Any]:
-    """Returns {"coordinate_map": {...}, "content": {...}}."""
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    coordinate_map: Dict[str, Any] = {}
-    content: Dict[str, str] = {}
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    except Exception as exc:
+        raise PdfReadError("Could not read this PDF.") from exc
 
     try:
-        span_counter = 0
+        if doc.needs_pass:
+            raise PdfReadError("Password-protected PDFs are not supported.")
+
+        coordinate_map: Dict[str, Any] = {}
+        content: Dict[str, str] = {}
+        page_info: List[Dict[str, float]] = []
+        counter = 0
+
         for page_index in range(len(doc)):
             page = doc[page_index]
-            raw = page.get_text("dict")
-            for block in raw["blocks"]:
-                if block.get("type") != 0:  # 0 = text block, 1 = image block
+            page_info.append({"width": page.rect.width, "height": page.rect.height})
+            for block in page.get_text("dict")["blocks"]:
+                if block.get("type") != 0:
                     continue
                 for line in block["lines"]:
                     for span in line["spans"]:
-                        text = span["text"]
-                        if not text.strip():
+                        if not span["text"].strip():
                             continue
-                        span_counter += 1
-                        span_id = f"s{span_counter:04d}"
+                        counter += 1
+                        span_id = f"s{counter:04d}"
                         coordinate_map[span_id] = {
                             "page": page_index,
                             "bbox": list(span["bbox"]),
+                            "origin": list(span["origin"]),
                             "font": span["font"],
+                            "flags": span["flags"],
                             "size": span["size"],
                             "color": span["color"],
+                            "text": span["text"],
                         }
-                        content[span_id] = text
+                        content[span_id] = span["text"]
     finally:
         doc.close()
 
-    return {"coordinate_map": coordinate_map, "content": content}
+    return {"coordinate_map": coordinate_map, "content": content, "page_info": page_info}
 
 
 def render_pdf(base_pdf_bytes: bytes, coordinate_map: Dict[str, Any], content: Dict[str, str]) -> bytes:
-    """Applies `content` on top of the ORIGINAL `base_pdf_bytes`, using the
-    positions recorded in `coordinate_map`. Only spans present in `content`
-    with different text than what's already there get touched."""
+    changed = [
+        (span_id, meta, content[span_id])
+        for span_id, meta in coordinate_map.items()
+        if span_id in content and content[span_id] != meta.get("text")
+    ]
+    if not changed:
+        return base_pdf_bytes
+
     doc = fitz.open(stream=base_pdf_bytes, filetype="pdf")
     try:
-        pages_touched = set()
-        spans_to_redraw = []
-
-        for span_id, meta in coordinate_map.items():
-            new_text = content.get(span_id)
-            if new_text is None:
-                continue
-            page_index = meta["page"]
-            rect = fitz.Rect(meta["bbox"])
-            doc[page_index].add_redact_annot(rect, fill=(1, 1, 1))
-            pages_touched.add(page_index)
-            spans_to_redraw.append((span_id, meta, new_text))
-
-        for page_index in pages_touched:
-            doc[page_index].apply_redactions()
-
-        for span_id, meta, new_text in spans_to_redraw:
-            page = doc[meta["page"]]
+        pages = set()
+        for _, meta, _ in changed:
             x0, y0, x1, y1 = meta["bbox"]
-            box_width = x1 - x0
-            box_height = y1 - y0
-            original_size = meta["size"]
-            fontsize = _fit_font_size(new_text, box_width, original_size)
-            color = _unpack_color(meta["color"])
-            # insert_text's point is the text baseline; approximate it as
-            # sitting a little above the bottom of the original box.
-            baseline_y = y1 - (box_height * 0.2)
-            page.insert_text((x0, baseline_y), new_text, fontsize=fontsize, color=color, fontname="helv")
+            inset = (y1 - y0) * 0.2
+            rect = fitz.Rect(x0, y0 + inset, x1, y1 - inset)
+            doc[meta["page"]].add_redact_annot(rect, fill=False)
+            pages.add(meta["page"])
+
+        for page_index in pages:
+            doc[page_index].apply_redactions(
+                images=fitz.PDF_REDACT_IMAGE_NONE,
+                graphics=fitz.PDF_REDACT_LINE_ART_NONE,
+            )
+
+        for span_id, meta, new_text in changed:
+            page = doc[meta["page"]]
+            font = pick_font(meta["flags"], meta["font"])
+            max_width = _available_width(span_id, meta, coordinate_map, page.rect.width)
+            size = _fit_font_size(new_text, font, meta["size"], max_width)
+            page.insert_text(
+                tuple(meta["origin"]),
+                new_text,
+                fontsize=size,
+                color=_unpack_color(meta["color"]),
+                fontname=font,
+            )
 
         return doc.tobytes(deflate=True, garbage=4)
     finally:
         doc.close()
 
 
+def _available_width(span_id: str, meta: Dict[str, Any], coordinate_map: Dict[str, Any], page_width: float) -> float:
+    x0, y0, x1, y1 = meta["bbox"]
+    height = y1 - y0
+    limit = page_width - _RIGHT_MARGIN
+    for other_id, other in coordinate_map.items():
+        if other_id == span_id or other["page"] != meta["page"]:
+            continue
+        ox0, oy0, _, oy1 = other["bbox"]
+        overlap = min(y1, oy1) - max(y0, oy0)
+        if overlap > height * 0.5 and ox0 >= x1 - 1:
+            limit = min(limit, ox0 - _NEIGHBOUR_GAP)
+    return max(x1 - x0, limit - x0)
+
+
+def _fit_font_size(text: str, font: str, size: float, max_width: float, min_size: float = 6.0) -> float:
+    width = fitz.get_text_length(text, fontname=font, fontsize=size)
+    if width <= max_width or width == 0:
+        return size
+    return max(min_size, size * max_width / width)
+
+
 def _unpack_color(color_int: int) -> Tuple[float, float, float]:
-    """PyMuPDF packs RGB as a single int; unpack to the (r, g, b) 0-1 floats
-    insert_text wants."""
-    r = ((color_int >> 16) & 255) / 255
-    g = ((color_int >> 8) & 255) / 255
-    b = (color_int & 255) / 255
-    return (r, g, b)
-
-
-def _fit_font_size(text: str, box_width: float, original_size: float, min_size: float = 6.0) -> float:
-    """Crude but effective v1 anti-overflow: shrink the font until the
-    (estimated) text width fits the original box. 0.5 is a rough average
-    glyph-width-to-fontsize ratio for Helvetica; good enough to avoid
-    obvious overflow, not pixel-perfect kerning."""
-    if not text:
-        return original_size
-    estimated_width = len(text) * original_size * 0.5
-    if estimated_width <= box_width or original_size <= min_size:
-        return original_size
-    scale = box_width / estimated_width
-    return max(min_size, original_size * scale)
+    return (((color_int >> 16) & 255) / 255, ((color_int >> 8) & 255) / 255, (color_int & 255) / 255)
