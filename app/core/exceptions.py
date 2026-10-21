@@ -33,3 +33,7 @@ class UnsupportedFileException(HTTPException):
 class FileTooLargeException(HTTPException):
     def __init__(self, detail: str = "File exceeds the maximum upload size."):
         super().__init__(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=detail)
+
+class BadRequestException(HTTPException):
+    def __init__(self, detail: str = "Bad Request"):
+        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
