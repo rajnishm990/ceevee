@@ -11,4 +11,4 @@ def slugify(value: str) -> str:
 def generate_shareable_slug(domain_name: str) -> str:
     """e.g. 'Backend' -> 'backend-x7fQ2a'. Collision handling (retry-until-unique)
     lives in ResumeService, since only it can check the DB."""
-    return f"{slugify(domain_name)}-{secrets.token_urlsafe(5)}"
+    return f"{slugify(domain_name)}-{secrets.token_urlsafe(9)}"
