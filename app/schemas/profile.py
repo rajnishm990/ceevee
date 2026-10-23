@@ -2,18 +2,18 @@ from typing import List, Optional
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from app.schemas.common import validate_http_url
 
-
-def _validate_http_url(value: Optional[str]) -> Optional[str]:
-    if value is None or value == "":
-        return None
-    value = value.strip()
-    parsed = urlparse(value)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        raise ValueError("Must be a valid http(s) URL.")
-    if len(value) > 300:
-        raise ValueError("URL is too long.")
-    return value
+# def _validate_http_url(value: Optional[str]) -> Optional[str]:
+#     if value is None or value == "":
+#         return None
+#     value = value.strip()
+#     parsed = urlparse(value)
+#     if parsed.scheme not in ("http", "https") or not parsed.netloc:
+#         raise ValueError("Must be a valid http(s) URL.")
+#     if len(value) > 300:
+#         raise ValueError("URL is too long.")
+#     return value
 
 
 class LinkItem(BaseModel):
@@ -23,7 +23,7 @@ class LinkItem(BaseModel):
     @field_validator("url")
     @classmethod
     def _url(cls, v: str) -> str:
-        return _validate_http_url(v) or ""
+        return validate_http_url(v) or ""
 
 
 class FieldItem(BaseModel):
