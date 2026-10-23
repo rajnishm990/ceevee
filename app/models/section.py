@@ -1,6 +1,6 @@
 from typing import List, Optional, TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint, true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 class ResumeSection(BaseModel):
     __tablename__ = "resume_sections"
+    __table_args__ = (UniqueConstraint("user_id", "domain_name", name="uq_section_user_name"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(
@@ -28,6 +29,8 @@ class ResumeSection(BaseModel):
     # changes even as versions come and go - it always resolves to
     # whichever version is currently active.
     shareable_slug: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+
+    sharing_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
 
     # Purely informational - has nothing to do with our storage/pipeline.
     gdrive_link: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
