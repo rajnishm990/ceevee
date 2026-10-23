@@ -4,6 +4,7 @@ from typing import List, Optional
 from app.core.config import settings
 from app.core.exceptions import (
     BadRequestException,
+    ConflictException,
     FileTooLargeException,
     ForbiddenException,
     NotFoundException,
@@ -22,11 +23,22 @@ class ResumeService:
         self.section_repo = section_repo
         self.version_repo = version_repo
 
-    async def create_section(self, user_id: int, section_in: SectionCreate):
-        slug = generate_shareable_slug(section_in.domain_name)
+    async def _unique_slug(self, domain_name: str) -> str:
+        slug = generate_shareable_slug(domain_name)
         while await self.section_repo.slug_exists(slug):
-            slug = generate_shareable_slug(section_in.domain_name)
-        return await self.section_repo.create(user_id, section_in, slug)
+            slug = generate_shareable_slug(domain_name)
+        return slug
+
+    async def create_section(self, user_id: int, section_in: SectionCreate):
+        if await self.section_repo.count_for_user(user_id) >= settings.MAX_SECTIONS_PER_USER:
+            raise ConflictException(f"You can have at most {settings.MAX_SECTIONS_PER_USER} sections.")
+        if await self.section_repo.get_by_user_and_name(user_id, section_in.domain_name):
+            raise ConflictException("You already have a section with this name.")
+        return await self.section_repo.create(user_id, section_in, await self._unique_slug(section_in.domain_name))
+
+    async def rotate_slug(self, section_id: int, user_id: int):
+        section = await self.get_owned_section(section_id, user_id)
+        return await self.section_repo.set_slug(section, await self._unique_slug(section.domain_name))
 
     async def get_owned_section(self, section_id: int, user_id: int, *, with_versions: bool = False):
         section = await self.section_repo.get_by_id(section_id, with_versions=with_versions)
@@ -38,6 +50,10 @@ class ResumeService:
 
     async def update_section(self, section_id: int, user_id: int, section_in: SectionUpdate):
         section = await self.get_owned_section(section_id, user_id)
+        new_name = section_in.domain_name
+        if new_name and new_name.lower() != section.domain_name.lower():
+            if await self.section_repo.get_by_user_and_name(user_id, new_name):
+                raise ConflictException("You already have a section with this name.")
         return await self.section_repo.update(section, section_in)
 
     async def delete_section(self, section_id: int, user_id: int) -> None:
@@ -62,6 +78,8 @@ class ResumeService:
             raise UnsupportedFileException()
         if len(raw_bytes) > settings.MAX_UPLOAD_SIZE_BYTES:
             raise FileTooLargeException()
+        if await self.version_repo.count_for_section(section.id) >= settings.MAX_VERSIONS_PER_SECTION:
+            raise ConflictException(f"A section can hold at most {settings.MAX_VERSIONS_PER_SECTION} versions.")
 
         try:
             layout = await asyncio.to_thread(pdf_engine.extract_layout, raw_bytes)
@@ -98,7 +116,12 @@ class ResumeService:
 
         merged = {**version.content, **updated_content}
         base_bytes = await StorageService.get_file(version.base_template_url)
-        rendered = await asyncio.to_thread(pdf_engine.render_pdf, base_bytes, version.coordinate_map, merged)
+        try:
+            rendered = await asyncio.to_thread(pdf_engine.render_pdf, base_bytes, version.coordinate_map, merged)
+        except pdf_engine.UnsupportedTextError as exc:
+            raise BadRequestException(
+                "These characters can't be drawn with this resume's fonts: " + " ".join(exc.chars)
+            ) from exc
 
         old_final = version.final_pdf_url
         new_path = await StorageService.save_file(StorageService.new_file_id(), rendered)
@@ -132,7 +155,7 @@ class ResumeService:
 
     async def get_public_pdf_by_slug(self, slug: str) -> bytes:
         section = await self.section_repo.get_by_slug(slug)
-        if not section:
+        if not section or not section.sharing_enabled:
             raise NotFoundException("This resume link isn't available.")
         return await self._pdf_for_active(section)
 
