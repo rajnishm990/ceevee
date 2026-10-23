@@ -6,12 +6,13 @@ from app.core.security import decode_token
 from app.models.user import User  
 from app.db.session import get_db 
 from app.repositories.user_repo import UserRepository 
+from app.repositories.cover_letter_repo import CoverLetterRepository
+from app.repositories.profile_repo import ProfileRepository
 from app.repositories.section_repo import SectionRepository 
 from app.repositories.version_repo import VersionRepository 
-from app.repositories.profile_repo import ProfileRepository
-from app.repositories.cover_letter_repo import CoverLetterRepository
-from app.services.resume_service import ResumeService 
+from app.services.account_service import AccountService
 from app.services.identity_service import IdentityService
+from app.services.resume_service import ResumeService 
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")  #token url is only for populating OpenAPi docs , login itself takes Json , not a form 
@@ -38,5 +39,10 @@ def get_user_repo(db:AsyncSession = Depends(get_db)) -> UserRepository:
 def get_resume_service(db: AsyncSession = Depends(get_db)) -> ResumeService:
     return ResumeService(SectionRepository(db), VersionRepository(db))
 
-def get_identity_service(db:AsyncSession = Depends(get_db)) -> IdentityService:
+
+def get_identity_service(db: AsyncSession = Depends(get_db)) -> IdentityService:
     return IdentityService(ProfileRepository(db), CoverLetterRepository(db))
+
+
+def get_account_service(db: AsyncSession = Depends(get_db)) -> AccountService:
+    return AccountService(UserRepository(db), SectionRepository(db))
