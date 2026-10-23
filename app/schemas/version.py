@@ -34,7 +34,7 @@ class ResumeEditRequest(BaseModel):
     def _limit_text(cls, v: Dict[str, str]) -> Dict[str, str]:
         if any(len(t) > 500 for t in v.values()):
             raise ValueError("Each text span is limited to 500 characters.")
-        return v
+        return {k: " ".join(t.split("\n")).replace("\r", " ").replace("\t", " ") for k, t in v.items()}
 
 
 class LabelUpdateRequest(BaseModel):
