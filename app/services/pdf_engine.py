@@ -16,6 +16,20 @@ class PdfReadError(Exception):
     pass
 
 
+class UnsupportedTextError(Exception):
+    def __init__(self, chars: List[str]):
+        self.chars = chars
+        super().__init__("Unsupported characters: " + " ".join(chars))
+
+
+_font_cache: Dict[str, "fitz.Font"] = {}
+
+
+def unsupported_chars(text: str, font: str) -> List[str]:
+    face = _font_cache.setdefault(font, fitz.Font(fontname=font))
+    return sorted({c for c in text if not c.isspace() and not face.has_glyph(ord(c))})
+
+
 def pick_font(flags: int, font_name: str) -> str:
     name = font_name.lower()
     if flags & 8 or "mono" in name or "courier" in name:
@@ -82,6 +96,10 @@ def render_pdf(base_pdf_bytes: bytes, coordinate_map: Dict[str, Any], content: D
     ]
     if not changed:
         return base_pdf_bytes
+
+    bad = sorted({c for _, meta, text in changed for c in unsupported_chars(text, pick_font(meta["flags"], meta["font"]))})
+    if bad:
+        raise UnsupportedTextError(bad)
 
     doc = fitz.open(stream=base_pdf_bytes, filetype="pdf")
     try:
