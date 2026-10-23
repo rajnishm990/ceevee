@@ -46,6 +46,12 @@ class VersionRepository:
         )
         return list(result.scalars().all())
 
+    async def count_for_section(self, section_id: int) -> int:
+        result = await self.session.execute(
+            select(func.count()).select_from(ResumeVersion).where(ResumeVersion.section_id ==section_id)
+        )
+        return result.scalar_one() + 1
+
     async def next_version_number(self, section_id: int) -> int:
         result = await self.session.execute(
             select(func.coalesce(func.max(ResumeVersion.version_number), 0)).where(ResumeVersion.section_id == section_id)
