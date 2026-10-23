@@ -46,7 +46,7 @@ class ProfileData(BaseModel):
     @field_validator("linkedin_url", "github_url", "website_url")
     @classmethod
     def _urls(cls, v: Optional[str]) -> Optional[str]:
-        return _validate_http_url(v)
+        return validate_http_url(v)
 
 
 class ProfileResponse(ProfileData):

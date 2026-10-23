@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, Request , status
 
-from app.api.deps import get_user_repo , get_current_user
+from app.api.deps import get_user_repo , get_current_user, get_account_service
 from app.core.rate_limit import limiter
 from app.models.user import User
 from app.repositories.user_repo import UserRepository
-from app.schemas.user import RefreshRequest, TokenPair, UserCreate, UserLogin, UserResponse
+from app.schemas.user import RefreshRequest, TokenPair, UserCreate, UserLogin, UserResponse , DeleteAccountRequest
 from app.services.auth_service import AuthService
+from app.services.account_service import AccountService
+
 
 router = APIRouter()
 
