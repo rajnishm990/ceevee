@@ -79,3 +79,10 @@ async def download_active_pdf(
     service: ResumeService = Depends(get_resume_service),
 ):
     return pdf_response(await service.get_active_pdf_bytes(section_id, current_user.id))
+
+
+@router.post("/{section_id}/rotate-slug", response_model=SectionResponse)
+async def rotate_slug(section_id: int , current_user:User = Depends(get_current_user), service: ResumeService = Depends(get_resume_service)):
+    return await service.rotate_slug(section_id, current_user.id) 
+
+
