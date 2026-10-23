@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request , status
 
 from app.api.deps import get_user_repo , get_current_user
 from app.core.rate_limit import limiter
@@ -29,3 +29,8 @@ async def refresh(payload: RefreshRequest, user_repo: UserRepository = Depends(g
 @router.get("/me", response_model=UserResponse)
 async def me(current_user:User = Depends(get_current_user)):
     return current_user 
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("5/minute")
+async def delete_me(request:Request , payload: DeleteAccountRequest , current_user: User = Depends(get_current_user), service: AccountService = Depends(get_account_service)):
+    await service.delete_account(current_user , payload.password)
