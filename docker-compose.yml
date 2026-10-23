@@ -1,0 +1,80 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ceevee
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ceevee
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ceevee -d ceevee"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:?set S3_ACCESS_KEY in .env}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env}
+    volumes:
+      - miniodata:/data
+    ports:
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "mc alias set local http://minio:9000 $${S3_ACCESS_KEY} $${S3_SECRET_KEY} &&
+      mc mb --ignore-existing local/$${S3_BUCKET_NAME}"
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-ceevee-resumes}
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      ENVIRONMENT: production
+      SECRET_KEY: ${SECRET_KEY:?run python scripts/gen_secrets.py}
+      PDF_ENCRYPTION_KEY: ${PDF_ENCRYPTION_KEY:?run python scripts/gen_secrets.py}
+      DATABASE_URL: postgresql+asyncpg://ceevee:${POSTGRES_PASSWORD}@db:5432/ceevee
+      RATE_LIMIT_STORAGE_URI: redis://redis:6379/0
+      STORAGE_BACKEND: s3
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-ceevee-resumes}
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
+      ALLOWED_HOSTS: '["localhost","api"]'
+      CORS_ORIGIN_REGEX: '^(http://localhost:\d+|chrome-extension://.*)$$'
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:
+  miniodata:
