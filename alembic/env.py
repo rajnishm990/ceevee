@@ -11,9 +11,11 @@ from app.db.base import BaseModel
 from app.models import CoverLetterTemplate, Profile, ResumeSection, ResumeVersion, User  # noqa: F401
 
 config = context.config 
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL) 
 
-if config.config_file_name  is not None :
+if not config.get_main_option('sqlalchemy.url'):
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%")) 
+
+if config.config_file_name  is not None and config.attributes.get("configure_logger, True"):
     fileConfig(config.config_file_name)
 
 target_metadata = BaseModel.metadata 
