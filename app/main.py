@@ -1,26 +1,31 @@
+import asyncio
+
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI , Depends
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
+from slowapi.middleware import SlowAPIMiddleware 
+
+from sqlalchemy import text 
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.rate_limit import limiter
 from app.db.base import BaseModel
-from app.db.session import engine
+from app.db.session import engine 
+from app.db.migrate import upgrade_to_head
+from app.db.session import get_db 
+
+
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if settings.ENVIRONMENT == "local":
-        # Quick local bootstrap so you're not forced into Alembic for a
-        # throwaway dev DB. Production always goes through real migrations
-        # (see alembic/env.py) - this block only ever runs for ENVIRONMENT=local.
-        async with engine.begin() as conn:
-            await conn.run_sync(BaseModel.metadata.create_all)
+    if settings.AUTO_MIGRATE:
+        await asyncio.to_thread(upgrade_to_head)
     yield
 
 
@@ -38,9 +43,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+if settings.ALLOWED_HOSTS!=["*"]:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=[*settings.ALLOWED_HOSTS, "localhost", "127.0.0.1"])
+
+
 app.include_router(api_router, prefix="/api/v1")
 
 
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "environment": settings.ENVIRONMENT}
+
+@app.get("/ready")
+async def ready(db: AsyncSession = Depends(get_db)):
+    await db.execute(text("SELECT 1"))
+    return {"status": "ready"} 
