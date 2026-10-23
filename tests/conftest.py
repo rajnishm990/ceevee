@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import AsyncGenerator, Awaitable, Callable, Dict, List
 
@@ -7,6 +8,7 @@ from argon2 import PasswordHasher
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
 from app.core.rate_limit import limiter
@@ -39,11 +41,17 @@ def isolated_storage_dir(tmp_path: Path, monkeypatch) -> Path:
     return storage
 
 
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+
+
 @pytest_asyncio.fixture()
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:", future=True)
+    in_memory = TEST_DATABASE_URL.endswith(":memory:")
+    engine = create_async_engine(TEST_DATABASE_URL, future=True, poolclass=None if in_memory else NullPool)
     enable_sqlite_fk(engine)
     async with engine.begin() as conn:
+        if not in_memory:
+            await conn.run_sync(BaseModel.metadata.drop_all)
         await conn.run_sync(BaseModel.metadata.create_all)
 
     session_factory = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
