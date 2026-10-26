@@ -50,7 +50,8 @@ class VersionRepository:
         result = await self.session.execute(
             select(func.count()).select_from(ResumeVersion).where(ResumeVersion.section_id ==section_id)
         )
-        return result.scalar_one() + 1
+        #return result.scalar_one() + 1  # kinda buggy so commenting it out
+        return result.scalar_one()
 
     async def next_version_number(self, section_id: int) -> int:
         result = await self.session.execute(
