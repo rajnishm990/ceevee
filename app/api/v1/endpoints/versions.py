@@ -1,11 +1,12 @@
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status , Request
 
 from app.api.deps import get_current_user, get_resume_service
 from app.api.responses import pdf_response
 from app.core.config import settings
 from app.models.user import User
+from app.core.rate_limit import limiter
 from app.schemas.version import LabelUpdateRequest, ResumeEditRequest, ResumeVersionResponse
 from app.services.resume_service import ResumeService
 
@@ -75,3 +76,15 @@ async def download_version(
 ):
     data = await service.get_version_pdf_bytes(version_id, current_user.id, original=source == "original")
     return pdf_response(data)
+
+
+@router.post("/versions/{version_id}/preview")
+@limiter.limit("60/minute")
+async def preview_version(
+    request: Request,
+    version_id: int,
+    payload: ResumeEditRequest,
+    current_user: User = Depends(get_current_user),
+    service: ResumeService = Depends(get_resume_service),
+):
+    return pdf_response(await service.preview_version(version_id, current_user.id, payload.updated_content))
