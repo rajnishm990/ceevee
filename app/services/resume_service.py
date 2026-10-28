@@ -107,9 +107,7 @@ class ResumeService:
         await self.get_owned_section(version.section_id, user_id)
         return version
 
-    async def edit_version(self, version_id: int, user_id: int, updated_content: dict):
-        version = await self.get_owned_version(version_id, user_id)
-
+    async def _render(self, version, updated_content: dict) -> tuple[dict, bytes]:
         unknown = set(updated_content) - set(version.coordinate_map)
         if unknown:
             raise BadRequestException(f"Unknown text ids: {sorted(unknown)[:5]}")
@@ -122,11 +120,28 @@ class ResumeService:
             raise BadRequestException(
                 "These characters can't be drawn with this resume's fonts: " + " ".join(exc.chars)
             ) from exc
+        return merged, rendered
+
+    async def preview_version(self, version_id: int, user_id: int, updated_content: dict) -> bytes:
+        version = await self.get_owned_version(version_id, user_id)
+        _, rendered = await self._render(version, updated_content)
+        return rendered
+
+    async def edit_version(
+        self, version_id: int, user_id: int, updated_content: dict, base_revision: Optional[int] = None
+    ):
+        version = await self.get_owned_version(version_id, user_id)
+        expected = base_revision if base_revision is not None else version.revision
+        if expected != version.revision:
+            raise ConflictException("This version was changed elsewhere. Reload to continue.")
+
+        merged, rendered = await self._render(version, updated_content)
 
         old_final = version.final_pdf_url
         new_path = await StorageService.save_file(StorageService.new_file_id(), rendered)
-        version = await self.version_repo.update_content(version, merged)
-        version = await self.version_repo.update_final_pdf_url(version, new_path)
+        if not await self.version_repo.save_edit(version, expected, merged, new_path):
+            await self._delete_files([new_path])
+            raise ConflictException("This version was changed elsewhere. Reload to continue.")
         if old_final:
             await self._delete_files([old_final])
         return version
@@ -180,3 +195,4 @@ class ResumeService:
     async def _delete_files(paths: List[str]) -> None:
         for path in paths:
             await StorageService.delete_file(path)
+
