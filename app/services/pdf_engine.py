@@ -61,7 +61,7 @@ def extract_layout(pdf_bytes: bytes) -> Dict[str, Any]:
 
         for page_index in range(len(doc)):
             page = doc[page_index]
-            page_info.append({"width": page.rect.width, "height": page.rect.height})
+            page_info.append({"width": page.rect.width, "height": page.rect.height, "rotation": page.rotation})
             for block in page.get_text("dict")["blocks"]:
                 if block.get("type") != 0:
                     continue
@@ -158,3 +158,4 @@ def _fit_font_size(text: str, font: str, size: float, max_width: float, min_size
 
 def _unpack_color(color_int: int) -> Tuple[float, float, float]:
     return (((color_int >> 16) & 255) / 255, ((color_int >> 8) & 255) / 255, (color_int & 255) / 255)
+
