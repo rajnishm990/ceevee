@@ -26,6 +26,7 @@ class ResumeVersion(BaseModel):
     )
 
     version_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     label: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # e.g. "Tailored for Stripe"
 
     # Encrypted-at-rest storage paths/keys (see StorageService). base_ is the
@@ -44,3 +45,4 @@ class ResumeVersion(BaseModel):
         back_populates="versions",
         foreign_keys=[section_id],
     )
+
