@@ -8,6 +8,7 @@ class ResumeVersionResponse(BaseModel):
     id: int
     section_id: int
     version_number: int
+    revision: int
     label: Optional[str]
     content: Dict[str, str]
     coordinate_map: Dict[str, Any]
@@ -28,6 +29,7 @@ class VersionSummary(BaseModel):
 
 class ResumeEditRequest(BaseModel):
     updated_content: Dict[str, str] = Field(max_length=2000)
+    base_revision: Optional[int] = Field(default=None, ge=1)
 
     @field_validator("updated_content")
     @classmethod
@@ -39,3 +41,4 @@ class ResumeEditRequest(BaseModel):
 
 class LabelUpdateRequest(BaseModel):
     label: Optional[str] = Field(default=None, max_length=100)
+
