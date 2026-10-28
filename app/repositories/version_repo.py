@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.version import ResumeVersion
@@ -50,7 +50,6 @@ class VersionRepository:
         result = await self.session.execute(
             select(func.count()).select_from(ResumeVersion).where(ResumeVersion.section_id ==section_id)
         )
-        #return result.scalar_one() + 1  # kinda buggy so commenting it out
         return result.scalar_one()
 
     async def next_version_number(self, section_id: int) -> int:
@@ -84,3 +83,13 @@ class VersionRepository:
         await self.session.delete(version)
         await self.session.flush()
 
+    async def save_edit(self, version: ResumeVersion, expected_revision: int, content: dict, final_pdf_url: str) -> bool:
+        result = await self.session.execute(
+            update(ResumeVersion)
+            .where(ResumeVersion.id == version.id, ResumeVersion.revision == expected_revision)
+            .values(content=content, final_pdf_url=final_pdf_url, revision=ResumeVersion.revision + 1)
+        )
+        if result.rowcount != 1:
+            return False
+        await self.session.refresh(version)
+        return True
