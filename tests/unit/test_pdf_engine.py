@@ -27,7 +27,7 @@ def test_extract_layout_records_geometry_and_pages():
     assert list(layout["content"].values()) == ["Senior Backend Engineer"]
     meta = next(iter(layout["coordinate_map"].values()))
     assert meta["text"] == "Senior Backend Engineer" and meta["origin"] and "flags" in meta
-    assert layout["page_info"] == [{"width": 595.0, "height": 842.0}]
+    assert layout["page_info"] == [{"width": 595.0, "height": 842.0, "rotation": 0}]
 
 
 def test_render_replaces_text():
@@ -102,3 +102,12 @@ def test_pick_font(flags, name, expected):
 def test_garbage_bytes_raise_pdf_read_error():
     with pytest.raises(PdfReadError):
         extract_layout(b"not a pdf at all")
+
+
+
+def test_page_rotation_is_recorded():
+    def draw(p):
+        p.insert_text((72, 100), "Rotated", fontsize=14)
+        p.set_rotation(90)
+
+    assert extract_layout(_pdf(draw))["page_info"][0]["rotation"] == 90
