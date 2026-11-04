@@ -127,3 +127,11 @@ async def test_oversized_request_returns_413_not_500(client, headers, section, m
         f"/api/v1/sections/{section['id']}/versions", files={"file": ("r.pdf", make_pdf(), "application/pdf")}, headers=headers
     )
     assert resp.status_code == 413
+
+
+
+async def test_limits_endpoint_reports_configured_quotas(client, monkeypatch):
+    monkeypatch.setattr(settings, "MAX_VERSIONS_PER_SECTION", 7)
+    body = (await client.get("/api/v1/limits")).json()
+    assert body["max_versions_per_section"] == 7 and body["max_sections"] == settings.MAX_SECTIONS_PER_USER
+    assert body["max_upload_bytes"] == settings.MAX_UPLOAD_SIZE_BYTES

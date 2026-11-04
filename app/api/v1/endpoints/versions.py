@@ -6,8 +6,9 @@ from app.api.deps import get_current_user, get_resume_service
 from app.api.responses import pdf_response
 from app.core.config import settings
 from app.models.user import User
+
 from app.core.rate_limit import limiter
-from app.schemas.version import LabelUpdateRequest, ResumeEditRequest, ResumeVersionResponse
+from app.schemas.version import LabelUpdateRequest, ResumeEditRequest, ResumeVersionResponse , ForkRequest
 from app.services.resume_service import ResumeService
 
 router = APIRouter()
@@ -45,7 +46,7 @@ async def edit_version(
     current_user: User = Depends(get_current_user),
     service: ResumeService = Depends(get_resume_service),
 ):
-    return await service.edit_version(version_id, current_user.id, payload.updated_content)
+    return await service.edit_version(version_id, current_user.id, payload.updated_content, payload.base_revision)
 
 
 @router.patch("/versions/{version_id}/label", response_model=ResumeVersionResponse)

@@ -20,6 +20,7 @@ class VersionRepository:
         content: dict,
         page_info: list,
         label: Optional[str] = None,
+        final_pdf_url: Optional[str] = None,
     ) -> ResumeVersion:
         db_obj = ResumeVersion(
             section_id=section_id,
@@ -29,6 +30,7 @@ class VersionRepository:
             coordinate_map=coordinate_map,
             content=content,
             page_info=page_info,
+            final_pdf_url=final_pdf_url,
         )
         self.session.add(db_obj)
         await self.session.flush()

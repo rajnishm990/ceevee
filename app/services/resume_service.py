@@ -1,6 +1,8 @@
 import asyncio
 from typing import List, Optional
 
+from sqlalchemy.exc import IntegrityError
+
 from app.core.config import settings
 from app.core.exceptions import (
     BadRequestException,
@@ -78,8 +80,7 @@ class ResumeService:
             raise UnsupportedFileException()
         if len(raw_bytes) > settings.MAX_UPLOAD_SIZE_BYTES:
             raise FileTooLargeException()
-        if await self.version_repo.count_for_section(section.id) >= settings.MAX_VERSIONS_PER_SECTION:
-            raise ConflictException(f"A section can hold at most {settings.MAX_VERSIONS_PER_SECTION} versions.")
+        await self._check_version_quota(section.id)
 
         try:
             layout = await asyncio.to_thread(pdf_engine.extract_layout, raw_bytes)
@@ -107,17 +108,18 @@ class ResumeService:
         await self.get_owned_section(version.section_id, user_id)
         return version
 
-    async def _check_version_quota(self , section_id) -> None:
-        if await self.version_repo.count_for_section(section_id) >= settings.MAX_SECTIONS_PER_SECTION:
-            raise ConflictException(f"A Section can hold at most {settings.MAX_VERSIONS_PER_SECTION} versions. Delete an old one first ")
+    async def _check_version_quota(self, section_id: int) -> None:
+        if await self.version_repo.count_for_section(section_id) >= settings.MAX_VERSIONS_PER_SECTION:
+            raise ConflictException(f"A section can hold at most {settings.MAX_VERSIONS_PER_SECTION} versions. Delete an old one first.")
 
-    async def _render(self, version, updated_content: dict) -> tuple[dict, bytes]:
+    async def _render(self, version, updated_content: dict, base_bytes: Optional[bytes] = None) -> tuple[dict, bytes]:
         unknown = set(updated_content) - set(version.coordinate_map)
         if unknown:
             raise BadRequestException(f"Unknown text ids: {sorted(unknown)[:5]}")
 
         merged = {**version.content, **updated_content}
-        base_bytes = await StorageService.get_file(version.base_template_url)
+        if base_bytes is None:
+            base_bytes = await StorageService.get_file(version.base_template_url)
         try:
             rendered = await asyncio.to_thread(pdf_engine.render_pdf, base_bytes, version.coordinate_map, merged)
         except pdf_engine.UnsupportedTextError as exc:
