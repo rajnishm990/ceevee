@@ -107,6 +107,10 @@ class ResumeService:
         await self.get_owned_section(version.section_id, user_id)
         return version
 
+    async def _check_version_quota(self , section_id) -> None:
+        if await self.version_repo.count_for_section(section_id) >= settings.MAX_SECTIONS_PER_SECTION:
+            raise ConflictException(f"A Section can hold at most {settings.MAX_VERSIONS_PER_SECTION} versions. Delete an old one first ")
+
     async def _render(self, version, updated_content: dict) -> tuple[dict, bytes]:
         unknown = set(updated_content) - set(version.coordinate_map)
         if unknown:
@@ -144,6 +148,42 @@ class ResumeService:
             raise ConflictException("This version was changed elsewhere. Reload to continue.")
         if old_final:
             await self._delete_files([old_final])
+        return version
+
+    async def fork_version(
+        self, version_id: int, user_id: int, updated_content: dict, label: Optional[str] = None, make_active: bool = True
+    ):
+        source = await self.get_owned_version(version_id, user_id)
+        section = await self.section_repo.get_by_id(source.section_id)
+        await self._check_version_quota(section.id)
+
+        base_bytes = await StorageService.get_file(source.base_template_url)
+        merged, rendered = await self._render(source, updated_content, base_bytes)
+
+        stored: List[str] = []
+        try:
+            base_path = await StorageService.save_file(StorageService.new_file_id(), base_bytes)
+            stored.append(base_path)
+            final_path = await StorageService.save_file(StorageService.new_file_id(), rendered)
+            stored.append(final_path)
+            version = await self.version_repo.create(
+                section_id=section.id,
+                version_number=await self.version_repo.next_version_number(section.id),
+                base_template_url=base_path,
+                final_pdf_url=final_path,
+                coordinate_map=source.coordinate_map,
+                content=merged,
+                page_info=source.page_info,
+                label=label or f"Edited from v{source.version_number}",
+            )
+            if make_active:
+                await self.section_repo.set_active_version(section, version.id)
+        except IntegrityError as exc:
+            await self._delete_files(stored)
+            raise ConflictException("Another version was created at the same moment. Please try again.") from exc
+        except Exception:
+            await self._delete_files(stored)
+            raise
         return version
 
     async def update_label(self, version_id: int, user_id: int, label: Optional[str]):
