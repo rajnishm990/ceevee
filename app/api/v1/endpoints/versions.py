@@ -88,3 +88,15 @@ async def preview_version(
     service: ResumeService = Depends(get_resume_service),
 ):
     return pdf_response(await service.preview_version(version_id, current_user.id, payload.updated_content))
+
+
+@router.post("/versions/{version_id}/fork", response_model=ResumeVersionResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit("30/minute")
+async def fork_version(
+    request: Request,
+    version_id: int,
+    payload: ForkRequest,
+    current_user: User = Depends(get_current_user),
+    service: ResumeService = Depends(get_resume_service),
+):
+    return await service.fork_version(version_id, current_user.id, payload.updated_content, payload.label, payload.make_active)
