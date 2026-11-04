@@ -27,9 +27,9 @@ class VersionSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class ResumeEditRequest(BaseModel):
+class _EditBody(BaseModel):
     updated_content: Dict[str, str] = Field(max_length=2000)
-    base_revision: Optional[int] = Field(default=None, ge=1)
+    #base_revision: Optional[int] = Field(default=None, ge=1)
 
     @field_validator("updated_content")
     @classmethod
@@ -37,6 +37,14 @@ class ResumeEditRequest(BaseModel):
         if any(len(t) > 500 for t in v.values()):
             raise ValueError("Each text span is limited to 500 characters.")
         return {k: " ".join(t.split("\n")).replace("\r", " ").replace("\t", " ") for k, t in v.items()}
+
+
+class ResumeEditRequest(_EditBody):
+    base_revision: Optional[int] = Field(default=None , ge=1)
+
+class ForkRequest(_EditBody):
+    label: Optional[str] = Field(default=None , max_length=100)
+    make_active:bool = True
 
 
 class LabelUpdateRequest(BaseModel):
